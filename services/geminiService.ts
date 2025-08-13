@@ -13,8 +13,11 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 const textModel = "gemini-2.5-flash";
 const imageModel = "imagen-3.0-generate-002";
 
-async function findTrendingTopic(industry: string): Promise<string> {
-    const prompt = `Using Google Search, find one current and highly relevant trending topic, news story, or popular question related to the '${industry}' industry. Provide only the topic name or headline.`;
+async function findTrendingTopic(client: Client): Promise<string> {
+    const prompt = `
+      // Client ID: ${client.id}
+      Using Google Search, find one current and highly relevant trending topic, news story, or popular question related to the '${client.industry}' industry. Provide only the topic name or headline.
+    `;
     const response = await ai.models.generateContent({
         model: textModel,
         contents: prompt,
@@ -41,9 +44,11 @@ const blogDetailsSchema = {
 
 async function generateBlogDetails(client: Client, topic: string): Promise<{ title: string; angle: string; keywords: string[] }> {
   const prompt = `
+    // Client ID: ${client.id}
     You are an expert content strategist for a company in the '${client.industry}' industry.
     Company's unique value proposition: '${client.uniqueValueProp}'
     Company's brand voice: '${client.brandVoice}'
+    Company's content strategy: '${client.contentStrategy}'
     We want to write a blog post about the following topic: '${topic}'
 
     Please generate a compelling, SEO-friendly blog post title, a unique angle for the article, and a list of 5-7 relevant SEO keywords.
@@ -79,12 +84,14 @@ async function generateOutline(title: string, angle: string): Promise<string> {
 
 async function generateFullContent(title: string, outline: string, client: Client): Promise<string> {
     const prompt = `
+        // Client ID: ${client.id}
         Write a complete blog post in HTML format based on the provided title and outline.
         Title (H1): '${title}'
         Outline:
         ${outline}
 
         Follow these instructions:
+        - Adhere to the client's content strategy: '${client.contentStrategy}'.
         - Elaborate on each point in the outline. Use <p> tags for paragraphs.
         - Use <h2> and <h3> tags exactly as specified in the outline.
         - Do NOT include the H1 title in the generated content; it will be added separately.
@@ -100,7 +107,124 @@ async function generateFullContent(title: string, outline: string, client: Clien
         model: textModel,
         contents: prompt
     });
-    return response.text.trim().replace(/^```html|```$/g, '').trim();
+
+    let content = response.text.trim().replace(/^```html|```$/g, '').trim();
+
+    const headings = content.match(/<h[23]>(.*?)<\/h[23]>/g) || [];
+    let imageCount = 0;
+
+    for (const heading of headings) {
+        if (imageCount >= 2) break;
+
+        const headingText = heading.replace(/<\/?h[23]>/g, '');
+        try {
+            const imageBase64 = await generateInBodyImage(headingText);
+            const imageTag = `<img src="data:image/jpeg;base64,${imageBase64}" alt="${headingText}" />`;
+            content = content.replace(heading, `${heading}\n${imageTag}`);
+            imageCount++;
+        } catch (error) {
+            console.error(`Failed to generate image for heading: ${headingText}`, error);
+        }
+    }
+
+    const faqSection = await generateFaqSection(title, content);
+    content += faqSection;
+
+    return content;
+}
+
+const faqSchema = {
+  type: Type.OBJECT,
+  properties: {
+    faqs: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          question: { type: Type.STRING, description: "A frequently asked question related to the blog post." },
+          answer: { type: Type.STRING, description: "The answer to the question." },
+        },
+        required: ["question", "answer"],
+      },
+    },
+  },
+  required: ["faqs"],
+};
+
+async function generateFaqSection(title: string, content: string): Promise<string> {
+    const prompt = `
+        Based on the following blog post title and content, generate a list of at least 3 frequently asked questions (FAQs) with their answers.
+
+        Title: ${title}
+
+        Content:
+        ${content.substring(0, 2000)}...
+
+        Return the FAQs in a JSON object that conforms to the provided schema.
+    `;
+
+    const response = await ai.models.generateContent({
+        model: textModel,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: faqSchema,
+        }
+    });
+
+    const { faqs } = JSON.parse(response.text);
+
+    const faqPageSchema = {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": faqs.map((faq: { question: string; answer: string }) => ({
+            "@type": "Question",
+            "name": faq.question,
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": faq.answer
+            }
+        }))
+    };
+
+    let html = `
+        <div class="faq-section">
+            <h2>Frequently Asked Questions</h2>
+    `;
+
+    faqs.forEach((faq: { question: string; answer: string }) => {
+        html += `
+            <h3>${faq.question}</h3>
+            <p>${faq.answer}</p>
+        `;
+    });
+
+    html += `
+        </div>
+        <script type="application/ld+json">
+            ${JSON.stringify(faqPageSchema)}
+        </script>
+    `;
+
+    return html;
+}
+
+async function generateInBodyImage(prompt: string): Promise<string> {
+    const fullPrompt = `${prompt}. A cinematic, photorealistic, high-quality image, no text or words on the image.`;
+    const response = await ai.models.generateImages({
+        model: imageModel,
+        prompt: fullPrompt,
+        config: {
+            numberOfImages: 1,
+            aspectRatio: "16:9",
+            outputMimeType: 'image/jpeg',
+        }
+    });
+    
+    if (!response.generatedImages || response.generatedImages.length === 0) {
+        throw new Error("Image generation failed to produce an image.");
+    }
+    return response.generatedImages[0].image.imageBytes;
 }
 
 async function generateFeaturedImage(title: string, angle: string): Promise<string> {
@@ -123,7 +247,7 @@ async function generateFeaturedImage(title: string, angle: string): Promise<stri
 
 export async function generateFullBlog(client: Client, updateProgress: (message: string) => void): Promise<BlogPost> {
     updateProgress("Finding trending topic...");
-    const topic = await findTrendingTopic(client.industry);
+    const topic = await findTrendingTopic(client);
 
     updateProgress(`Generating title, angle, and keywords for: "${topic}"`);
     const { title, angle, keywords } = await generateBlogDetails(client, topic);

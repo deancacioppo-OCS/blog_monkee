@@ -22,6 +22,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
     sitemapUrl: '', // Added
     uniqueValueProp: '',
     brandVoice: '',
+    contentStrategy: '',
     wp: { url: '', username: '', appPassword: '' },
   });
 
@@ -30,11 +31,12 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
       setFormData({
         ...existingClient,
         sitemapUrl: existingClient.sitemapUrl || '', // Added
+        contentStrategy: existingClient.contentStrategy || '',
         wp: { ...existingClient.wp, appPassword: '' }
       });
     } else {
       setFormData({
-        name: '', industry: '', websiteUrl: '', sitemapUrl: '', uniqueValueProp: '', brandVoice: '', // Added sitemapUrl
+        name: '', industry: '', websiteUrl: '', sitemapUrl: '', uniqueValueProp: '', brandVoice: '', contentStrategy: '', // Added sitemapUrl
         wp: { url: '', username: '', appPassword: '' },
       });
     }
@@ -92,6 +94,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
         <Input id="sitemapUrl" name="sitemapUrl" label="Sitemap URL" value={formData.sitemapUrl || ''} onChange={handleChange} placeholder="https://example.com/sitemap.xml" />
         <Textarea id="uniqueValueProp" name="uniqueValueProp" label="Unique Value Proposition" value={formData.uniqueValueProp} onChange={handleChange} rows={3} />
         <Textarea id="brandVoice" name="brandVoice" label="Brand Voice Description" value={formData.brandVoice} onChange={handleChange} rows={3} />
+        <Textarea id="contentStrategy" name="contentStrategy" label="Content Strategy" value={formData.contentStrategy} onChange={handleChange} rows={3} />
 
         <h3 className="text-lg font-semibold border-t border-slate-700 pt-4 mt-4 text-slate-300">WordPress Credentials</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -12,6 +12,7 @@ export interface Client {
   websiteUrl: string;
   uniqueValueProp: string;
   brandVoice: string;
+  contentStrategy: string;
   wp: WordPressCredentials;
   sitemapUrl?: string;
   sitemapUrls?: string[];
