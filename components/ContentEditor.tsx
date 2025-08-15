@@ -30,6 +30,8 @@ const ContentEditor: React.FC<ContentEditorProps> = ({ client, blogPost, setBlog
       const postUrl = await publishToWordPress(client, blogPost, status);
       alert(`Successfully published to WordPress as a ${status}!\nURL: ${postUrl}`);
       onBack();
+
+
     } catch (error) {
       console.error("Failed to publish to WordPress:", error);
       alert(`Failed to publish: ${error instanceof Error ? error.message : String(error)}`);
@@ -57,7 +59,7 @@ const ContentEditor: React.FC<ContentEditorProps> = ({ client, blogPost, setBlog
         <div className="flex gap-2">
           <Button onClick={() => handlePublish('draft')} variant="secondary" disabled={isPublishing}>
             {isPublishing && publishStatus === 'draft' ? <LoaderIcon className="w-4 h-4" /> : <WordPressIcon className="w-4 h-4" />}
-            Save as Draft
+            Post as Draft
           </Button>
           <Button onClick={() => handlePublish('publish')} disabled={isPublishing}>
             {isPublishing && publishStatus === 'publish' ? <LoaderIcon className="w-4 h-4" /> : <WordPressIcon className="w-4 h-4" />}
