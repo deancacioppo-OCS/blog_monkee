@@ -2,6 +2,21 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
+const winston = require('winston');
+
+// Configure Winston logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
 
 const app = express();
 const port = 3001;
@@ -11,9 +26,9 @@ app.use(express.json());
 
 const db = new sqlite3.Database('./database.db', (err) => {
   if (err) {
-    console.error(err.message);
+    logger.error(`Database connection error: ${err.message}`);
   }
-  console.log('Connected to the SQLite database.');
+  logger.info('Connected to the SQLite database.');
 });
 
 db.serialize(() => {
@@ -34,52 +49,66 @@ db.serialize(() => {
   `);
 });
 
-app.get('/api/clients/:clientId/used-topics', (req, res) => {
+app.get('/api/clients/:clientId/used-topics', (req, res, next) => {
   const { clientId } = req.params;
+  logger.info(`Fetching used topics for client: ${clientId}`);
   db.all('SELECT topic FROM used_topics WHERE client_id = ?', [clientId], (err, rows) => {
     if (err) {
-      res.status(500).json({ error: err.message });
-      return;
+      logger.error(`Error fetching used topics for client ${clientId}: ${err.message}`);
+      return next(err);
     }
+    logger.info(`Successfully fetched ${rows.length} used topics for client: ${clientId}`);
     res.json(rows.map(row => row.topic));
   });
 });
 
-app.post('/api/clients/:clientId/used-topics', (req, res) => {
+app.post('/api/clients/:clientId/used-topics', (req, res, next) => {
   const { clientId } = req.params;
   const { topic } = req.body;
+  logger.info(`Attempting to add used topic "${topic}" for client: ${clientId}`);
   db.run('INSERT INTO used_topics (client_id, topic) VALUES (?, ?)', [clientId, topic], function (err) {
     if (err) {
-      res.status(500).json({ error: err.message });
-      return;
+      logger.error(`Error adding used topic "${topic}" for client ${clientId}: ${err.message}`);
+      return next(err);
     }
-    res.json({ id: this.lastID });
+    logger.info(`Successfully added used topic "${topic}" for client ${clientId} with ID: ${this.lastID}`);
+    res.status(201).json({ id: this.lastID });
   });
 });
 
-app.get('/api/clients/:clientId/sitemap-urls', (req, res) => {
+app.get('/api/clients/:clientId/sitemap-urls', (req, res, next) => {
   const { clientId } = req.params;
+  logger.info(`Fetching sitemap URLs for client: ${clientId}`);
   db.all('SELECT url FROM sitemap_urls WHERE client_id = ?', [clientId], (err, rows) => {
     if (err) {
-      res.status(500).json({ error: err.message });
-      return;
+      logger.error(`Error fetching sitemap URLs for client ${clientId}: ${err.message}`);
+      return next(err);
     }
+    logger.info(`Successfully fetched ${rows.length} sitemap URLs for client: ${clientId}`);
     res.json(rows.map(row => row.url));
   });
 });
 
-app.post('/api/clients/:clientId/sitemap-urls', (req, res) => {
+app.post('/api/clients/:clientId/sitemap-urls', (req, res, next) => {
   const { clientId } = req.params;
   const { url } = req.body;
+  logger.info(`Attempting to add sitemap URL "${url}" for client: ${clientId}`);
   db.run('INSERT INTO sitemap_urls (client_id, url) VALUES (?, ?)', [clientId, url], function (err) {
     if (err) {
-      res.status(500).json({ error: err.message });
-      return;
+      logger.error(`Error adding sitemap URL "${url}" for client ${clientId}: ${err.message}`);
+      return next(err);
     }
-    res.json({ id: this.lastID });
+    logger.info(`Successfully added sitemap URL "${url}" for client ${clientId} with ID: ${this.lastID}`);
+    res.status(201).json({ id: this.lastID });
   });
 });
 
+// Centralized error handling middleware
+app.use((err, req, res, next) => {
+  logger.error(`Unhandled error: ${err.message}`, { stack: err.stack, path: req.path, method: req.method, ip: req.ip });
+  res.status(500).json({ error: 'An unexpected error occurred.' });
+});
+
 app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
+  logger.info(`Server is running on http://localhost:${port}`);
 });
