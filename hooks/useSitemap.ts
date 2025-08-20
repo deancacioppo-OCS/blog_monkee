@@ -12,6 +12,7 @@ const useSitemap = (sitemapUrl: string | undefined): SitemapResult => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log("DEBUG: useSitemap - sitemapUrl received:", sitemapUrl); // Added log
     const fetchSitemap = async () => {
       if (!sitemapUrl) {
         setUrls([]);
@@ -27,12 +28,12 @@ const useSitemap = (sitemapUrl: string | undefined): SitemapResult => {
       try {
         // Construct the proxied URL
         const url = new URL(sitemapUrl);
-        const proxiedSitemapUrl = `/sitemap-proxy${url.pathname}${url.search}`;
-        const response = await fetch(proxiedSitemapUrl);
+        const response = await fetch(`http://localhost:3001/api/sitemap-fetch?sitemapUrl=${encodeURIComponent(sitemapUrl)}`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const text = await response.text();
+        console.log("DEBUG: useSitemap - Raw response text from backend:", text);
 
         // Parse XML to extract URLs
         const parser = new DOMParser();
@@ -50,6 +51,7 @@ const useSitemap = (sitemapUrl: string | undefined): SitemapResult => {
             extractedUrls.push(loc.textContent);
           }
         });
+        console.log("DEBUG: useSitemap - Extracted URLs:", extractedUrls); // Added log
         setUrls(extractedUrls);
       } catch (e: any) {
         console.error("Error fetching or parsing sitemap:", e);

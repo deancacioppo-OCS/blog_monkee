@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Client } from '../types';
 import { Modal } from './ui/Modal';
@@ -10,7 +9,7 @@ import useSitemap from '../hooks/useSitemap';
 interface ClientFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (client: Client, sitemapUrls: string[], sitemapLoading: boolean, sitemapError: string | null) => void; // Modified
+  onSave: (client: Client, externalSitemapUrls: string[], sitemapLoading: boolean, sitemapError: string | null) => void; // Modified
   existingClient: Client | null;
 }
 
@@ -27,6 +26,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
   });
 
   useEffect(() => {
+    console.log("DEBUG: ClientForm.tsx - useEffect - existingClient ID:", existingClient?.id, "sitemapUrl from existingClient:", existingClient?.sitemapUrl); // Added log
     if (existingClient) {
       setFormData({
         ...existingClient,
@@ -36,10 +36,11 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
       });
     } else {
       setFormData({
-        name: '', industry: '', websiteUrl: '', sitemapUrl: '', uniqueValueProp: '', brandVoice: '', contentStrategy: '', // Added sitemapUrl
+        name: '', industry: '', websiteUrl: '', sitemapUrl: '', uniqueValueProp: '', brandVoice: '', contentStrategy: '',
         wp: { url: '', username: '', appPassword: '' },
       });
     }
+    console.log("DEBUG: ClientForm.tsx - useEffect - formData.sitemapUrl after setFormData:", formData.sitemapUrl); // Added log
   }, [existingClient, isOpen]);
 
   const { urls: sitemapUrls, loading: sitemapLoading, error: sitemapError } = useSitemap(formData.sitemapUrl); // Added
@@ -56,6 +57,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("DEBUG: ClientForm.tsx - handleSubmit - formData.sitemapUrl:", formData.sitemapUrl); // Added log
+    console.log("DEBUG: ClientForm.tsx - handleSubmit - sitemapUrls from useSitemap:", sitemapUrls); // Added log
     if (!formData.name || !formData.industry) {
         alert("Client Name and Industry are required.");
         return;
@@ -77,7 +80,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
         ...formData.wp,
         appPassword: formData.wp.appPassword || existingClient?.wp.appPassword,
       },
-      sitemapUrls: sitemapUrls, // Added
+      externalSitemapUrls: sitemapUrls, // Changed to externalSitemapUrls
     };
     onSave(clientToSave, sitemapUrls, sitemapLoading, sitemapError); // Modified
     onClose();
@@ -95,7 +98,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
         <Textarea id="uniqueValueProp" name="uniqueValueProp" label="Unique Value Proposition" value={formData.uniqueValueProp} onChange={handleChange} rows={3} />
         <Textarea id="brandVoice" name="brandVoice" label="Brand Voice Description" value={formData.brandVoice} onChange={handleChange} rows={3} />
         <Textarea id="contentStrategy" name="contentStrategy" label="Content Strategy" value={formData.contentStrategy} onChange={handleChange} rows={3} />
-
+        
         <h3 className="text-lg font-semibold border-t border-slate-700 pt-4 mt-4 text-slate-300">WordPress Credentials</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input id="wp.url" name="wp.url" label="WordPress Site URL" value={formData.wp.url} onChange={handleChange} placeholder="https://example.com" />

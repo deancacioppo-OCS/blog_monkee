@@ -1,4 +1,3 @@
-
 import { Client, BlogPost } from '../types';
 
 async function uploadFeaturedImage(client: Client, blogPost: BlogPost): Promise<{ mediaId: number; mediaUrl: string }> {
@@ -21,7 +20,8 @@ async function uploadFeaturedImage(client: Client, blogPost: BlogPost): Promise<
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+    const errorData = await response.json().catch(() => ({ message: 'Unknown error', details: 'No JSON response body' }));
+    console.error("DEBUG: WordPress Image Upload Error:", { status: response.status, statusText: response.statusText, errorData }); // Added detailed log
     throw new Error(`Failed to upload image: ${response.status} ${response.statusText} - ${errorData.message}`);
   }
 
@@ -37,7 +37,7 @@ export async function publishToWordPress(client: Client, blogPost: BlogPost, sta
   const { wp } = client;
   const endpoint = `${wp.url.replace(/\/$/, '')}/wp-json/wp/v2/posts`;
   
-  const postData = {
+  const postData: any = { // Use any for now to allow dynamic properties
     title: blogPost.title,
     content: blogPost.content,
     status: status,
@@ -57,7 +57,8 @@ export async function publishToWordPress(client: Client, blogPost: BlogPost, sta
   });
 
   if (!response.ok) {
-     const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+     const errorData = await response.json().catch(() => ({ message: 'Unknown error', details: 'No JSON response body' }));
+     console.error("DEBUG: WordPress Post Creation Error:", { status: response.status, statusText: response.statusText, errorData }); // Added detailed log
      throw new Error(`Failed to create post: ${response.status} ${response.statusText} - ${errorData.message}`);
   }
 

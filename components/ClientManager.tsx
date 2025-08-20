@@ -19,11 +19,12 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, setClients, sele
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
 
-  const handleSaveClient = (client: Client, sitemapUrls: string[], sitemapLoading: boolean, sitemapError: string | null) => {
+  const handleSaveClient = (client: Client, externalSitemapUrls: string[], sitemapLoading: boolean, sitemapError: string | null) => {
     const clientToSave: Client = {
       ...client,
-      sitemapUrls: sitemapUrls,
+      externalSitemapUrls: externalSitemapUrls, // Changed to externalSitemapUrls
     };
+    console.log("DEBUG: ClientManager.tsx - Saving Client ID:", clientToSave.id, "External Sitemap URLs:", clientToSave.externalSitemapUrls); // Updated log message
     setClients(prev => {
       const existing = prev.find(c => c.id === clientToSave.id);
       if (existing) {

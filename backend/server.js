@@ -3,6 +3,7 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const winston = require('winston');
+const fetch = require('node-fetch'); // Added node-fetch
 
 // Configure Winston logger
 const logger = winston.createLogger({
@@ -107,6 +108,29 @@ app.post('/api/clients/:clientId/sitemap-urls', (req, res, next) => {
 app.use((err, req, res, next) => {
   logger.error(`Unhandled error: ${err.message}`, { stack: err.stack, path: req.path, method: req.method, ip: req.ip });
   res.status(500).json({ error: 'An unexpected error occurred.' });
+});
+
+app.get('/api/sitemap-fetch', async (req, res) => {
+  const { sitemapUrl } = req.query;
+  logger.info(`Fetching sitemap from: ${sitemapUrl}`);
+
+  if (!sitemapUrl) {
+    return res.status(400).json({ error: 'sitemapUrl query parameter is required.' });
+  }
+
+  try {
+    const response = await fetch(sitemapUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch sitemap: ${response.statusText}`);
+    }
+    const text = await response.text();
+    logger.info(`Raw sitemap content for ${sitemapUrl}:\n${text}`);
+    res.set('Content-Type', response.headers.get('Content-Type') || 'application/xml');
+    res.send(text);
+  } catch (error) {
+    logger.error(`Error fetching sitemap from ${sitemapUrl}: ${error.message}`);
+    res.status(500).json({ error: error.message || 'Failed to fetch sitemap.' });
+  }
 });
 
 app.listen(port, () => {

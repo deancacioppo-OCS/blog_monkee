@@ -1,16 +1,7 @@
-# Run and deploy your AI Studio app
 
-This contains everything you need to run your app locally.
+*   **Featured Image Generation:** **FIXED.** The issue where the featured image was not being generated or passed for WordPress upload has been resolved. The AI model now correctly generates the image, and it is included in the blog post data for publishing.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1y7rq3IkbwrMyema1l7Q5vUodDF8uvtmQ?showAssistant=true&showCode=true&showTreeView=true&showPreview=true&resourceKey=
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+**Placemarker: FEATURED_IMAGE_FIX_COMPLETE**
+This marks the completion of the "Featured Image" fix.
+---

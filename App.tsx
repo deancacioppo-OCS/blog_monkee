@@ -1,5 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
+// Placemarker: NO_BLEED_FIX_COMPLETE
+// This marks the completion of the "No Bleed" fix.
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { Client, BlogPost } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import ClientManager from './components/ClientManager';
@@ -18,7 +21,9 @@ export default function App(): React.ReactNode {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const selectedClient = useMemo(() => {
-    return clients.find(c => c.id === selectedClientId) ?? null;
+    const client = clients.find(c => c.id === selectedClientId) ?? null;
+    console.log("DEBUG: App.tsx - Selected Client ID:", client?.id, "External Sitemap URLs:", client?.externalSitemapUrls, "Generated Blog Post URLs:", client?.generatedBlogPostUrls); // Updated log message
+    return client;
   }, [clients, selectedClientId]);
 
   const handleSelectClient = (clientId: string | null) => {
@@ -29,6 +34,35 @@ export default function App(): React.ReactNode {
   const resetToWorkflow = () => {
     setCurrentBlogPost(null);
   };
+
+  useEffect(() => {
+    if (selectedClientId) {
+      const fetchSitemapUrls = async () => {
+        try {
+          const response = await fetch(`http://localhost:3001/api/clients/${selectedClientId}/sitemap-urls`);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const generatedBlogPostUrls = await response.json();
+          
+          setClients(prevClients => {
+            const updatedClients = prevClients.map(client => 
+              client.id === selectedClientId 
+                ? { ...client, generatedBlogPostUrls: generatedBlogPostUrls } 
+                : client
+            );
+            console.log("DEBUG: App.tsx - Updated Clients after fetching generated blog post URLs:", updatedClients); // Changed log message
+            return updatedClients;
+          });
+        } catch (error) {
+          console.error("Failed to fetch sitemap URLs:", error);
+        }
+      };
+      fetchSitemapUrls();
+    }
+  }, [selectedClientId, setClients]);
+
+  
 
   return (
     <div className="flex h-screen font-sans bg-slate-900 text-slate-200">

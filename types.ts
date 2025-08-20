@@ -15,7 +15,8 @@ export interface Client {
   contentStrategy: string;
   wp: WordPressCredentials;
   sitemapUrl?: string;
-  sitemapUrls?: string[];
+  externalSitemapUrls?: string[];
+  generatedBlogPostUrls?: string[];
 }
 
 export interface BlogPost {
