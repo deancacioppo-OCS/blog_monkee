@@ -20,6 +20,7 @@ async function findTrendingTopic(client: Client): Promise<string> {
       // Client ID: ${client.id}
       Using Google Search, find one current and highly relevant trending topic, news story, or popular question related to the '${client.industry}' industry. Provide only the topic name or headline.
       Consider the existing content on the client's website (from the sitemap) to avoid duplicate topics and find relevant areas for internal linking.
+      **Rule:** Never create any content that is disparaging to the client or the client's business model.
       Existing sitemap URLs:
       ${client.externalSitemapUrls && client.externalSitemapUrls.length > 0 ? client.externalSitemapUrls.join('\n') : 'No external sitemap URLs available.'}
     `;
@@ -62,6 +63,7 @@ async function generateBlogDetails(client: Client, topic: string): Promise<{ tit
     ${client.externalSitemapUrls && client.externalSitemapUrls.length > 0 ? client.externalSitemapUrls.join('\n') : 'No external sitemap URLs available.'}
 
     Please generate a compelling, SEO-friendly blog post title, a unique angle for the article, and a list of 5-7 relevant SEO keywords.
+    **Rule:** Never create any content that is disparaging to the client or the client's business model.
   `;
 
 
@@ -87,7 +89,8 @@ async function generateOutline(title: string, angle: string): Promise<string> {
         Title: '${title}'
         Angle: '${angle}'
 
-        The outline should have a clear hierarchical structure with H2 and H3 headings. Include an introduction and a conclusion. The blog title itself will be the H1, so do not include it in the outline. Output only the outline.
+        The outline should have a clear hierarchical structure with H2 and H3 headings. Include an introduction and a conclusion. The blog title itself will be the H1, so do not include it in the outline.
+        **Rule:** Never create any content that is disparaging to the client or the client's business model.
     `;
     console.log("DEBUG: generateOutline - Prompt sent to Gemini:", prompt); // Added log
      const response = await ai.models.generateContent({
@@ -102,33 +105,38 @@ async function generateOutline(title: string, angle: string): Promise<string> {
 async function generateFullContent(title: string, outline: string, client: Client): Promise<string> {
     console.log("DEBUG: generateFullContent - Client ID:", client.id, "Client Name:", client.name, "External Sitemap URLs:", client.externalSitemapUrls); // Added log
     const ai = getAiInstance();
-    const prompt = `
-        // Client ID: ${client.id}
-        Write a complete blog post in HTML format based on the provided title and outline.
-        Title (H1): '${title}'
-        Outline:
-        ${outline}
-
-        Follow these instructions:
-        - Adhere to the client's content strategy: '${client.contentStrategy}'.
-        - Elaborate on each point in the outline. Use <p> tags for paragraphs.
-        - Use <h2> and <h3> tags exactly as specified in the outline.
-        - Do NOT include the H1 title in the generated content; it will be added separately.
-        - Write in the following brand voice: '${client.brandVoice}'.
-        - Naturally incorporate the company's unique value proposition where relevant: '${client.uniqueValueProp}'.
-        - Ensure the tone is confident and expert. Avoid apologetic language or AI self-references.
-        - The content must be original and engaging.
-        - **IMPORTANT:** Include external HTML hyperlinks to relevant, high-authority referencing material where appropriate.
-        - **CRITICAL:** You MUST include exactly 2-4 internal HTML hyperlinks within the generated content. Each link MUST point to a DIFFERENT URL from the provided list. The anchor text for each link MUST be naturally and contextually integrated into the surrounding prose. Prioritize linking to live and published content if possible. Select these links from the following list of URLs:
-          ${client.externalSitemapUrls && client.externalSitemapUrls.length > 0 ? client.externalSitemapUrls.join('\n') : 'No external sitemap URLs available. If no URLs are available, do NOT include internal links.'}
-    `;
-    console.log("DEBUG: generateFullContent - Prompt sent to Gemini:", prompt); // Added log
+    let prompt = `// Client ID: ${client.id}\n`;
+    prompt += `Write a complete blog post in HTML format based on the provided title and outline.\n`;
+    prompt += `Title (H1): '${title}'\n`;
+    prompt += `Outline:\n`;
+    prompt += `${outline}\n\n`;
+    prompt += `**Content Guidelines:**\n`;
+    prompt += `- Adhere to the client's content strategy: '${client.contentStrategy}'.\n`;
+    prompt += `- Write in the following brand voice: '${client.brandVoice}'.\n`;
+    prompt += `- Naturally incorporate the company's unique value proposition where relevant: '${client.uniqueValueProp}'.\n`;
+    prompt += `- Ensure the tone is confident and expert. Avoid apologetic language or AI self-references.\n`;
+    prompt += `- The content must be original and engaging.\n`;
+    prompt += `- **Rule:** Never create any content that is disparaging to the client or the client's business model.\n`;
+    prompt += `\n`; // Add a newline for separation
+    prompt += `**Internal Linking (CRITICAL):**\n`;
+    prompt += `- MUST include exactly 2-4 internal HTML hyperlinks. Each link MUST point to a different URL from the provided sitemap. Anchor text MUST be naturally and contextually integrated. Only link to to live, published URLs.\n`;
+    prompt += `\n`; // Add a newline for separation
+    prompt += `**External Linking (ABSOLUTELY CRITICAL):**\n`;
+    prompt += `- MANDATORY: Generate between 2 and 8 external links using proper HTML <a> tags. These links must be naturally and contextually integrated, providing "more information" on the anchor text. If specific links are hard to find, use general high-authority sources (e.g., Wikipedia, reputable industry publications) to meet the count. DO NOT omit external links.\n`;
+    console.log("DEBUG: Final prompt sent to Gemini:", prompt); // Added log
     const response = await ai.models.generateContent({
         model: textModel,
         contents: prompt
     });
 
-    let content = response.text.trim().replace(/^```html|```$/g, '').trim();
+    let content = response.text.trim();
+    if (content.startsWith('```html')) {
+        content = content.substring('```html'.length);
+    }
+    if (content.endsWith('```')) {
+        content = content.substring(0, content.length - '```'.length);
+    }
+    content = content.trim();
 
     // const headings = content.match(/<h[23]>(.*?)<\/h[23]>/g) || [];
     // let imageCount = 0;
@@ -143,7 +151,7 @@ async function generateFullContent(title: string, outline: string, client: Clien
     //         content = content.replace(heading, `${heading}\n${imageTag}`);
     //         imageCount++;
     //     } catch (error) {
-    //         console.error(`Failed to generate image for heading: ${headingText}`, error);
+    //         console.error(`Failed to generate image for heading: ${headingText}`, error); // Added log
     //     }
     // }
 
@@ -245,6 +253,7 @@ async function generateInBodyImage(prompt: string): Promise<string> {
     });
     
     if (!response.generatedImages || response.generatedImages.length === 0) {
+        console.error("DEBUG: generateInBodyImage - Image generation API response:", response); // Added log
         throw new Error("Image generation failed to produce an image.");
     }
     return response.generatedImages[0].image.imageBytes;
@@ -265,6 +274,7 @@ async function generateFeaturedImage(title: string, angle: string): Promise<stri
     });
     
     if (!response.generatedImages || response.generatedImages.length === 0) {
+        console.error("DEBUG: generateFeaturedImage - Image generation API response:", response); // Added log
         throw new Error("Image generation failed to produce an image.");
     }
     return response.generatedImages[0].image.imageBytes;
@@ -296,8 +306,9 @@ export async function generateFullBlog(client: Client, updateProgress: (message:
         console.log("DEBUG: generateFullBlog - Outline generated:", outline); // Added log
 
         updateProgress("Writing full blog post content...");
+        console.log("DEBUG: generateFullBlog - Calling generateFullContent with:", { title, outline, client });
         const content = await generateFullContent(title, outline, client);
-        console.log("DEBUG: generateFullBlog - Full content generated."); // Added log
+        console.log("DEBUG: generateFullBlog - Full content generated.", content.substring(0, 200) + "..."); // Log first 200 chars
 
         updateProgress("Generating featured image...");
         const featuredImageBase64 = await generateFeaturedImage(title, angle);
@@ -325,7 +336,7 @@ export async function generateFullBlog(client: Client, updateProgress: (message:
             client.generatedBlogPostUrls = updatedSitemapUrls; // Update the client object with the latest generated blog post URLs
 
         } catch (error) {
-            console.error("Failed to add new blog post to sitemap:", error);
+            console.error("Failed to add new blog post to sitemap:", error); // Added log
             // We don't want to block the whole process if this fails
         }
 
