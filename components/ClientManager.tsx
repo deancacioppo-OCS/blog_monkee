@@ -9,38 +9,29 @@ import { TrashIcon } from './icons/TrashIcon';
 
 interface ClientManagerProps {
   clients: Client[];
-  setClients: React.Dispatch<React.SetStateAction<Client[]>>;
+  onClientChange: (action: 'save' | 'delete', clientData?: Client) => void; // Modified
   selectedClientId: string | null;
   onSelectClient: (clientId: string | null) => void;
   isGenerating: boolean;
 }
 
-const ClientManager: React.FC<ClientManagerProps> = ({ clients, setClients, selectedClientId, onSelectClient, isGenerating }) => {
+const ClientManager: React.FC<ClientManagerProps> = ({ clients, onClientChange, selectedClientId, onSelectClient, isGenerating }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
 
-  const handleSaveClient = (client: Client, externalSitemapUrls: string[], sitemapLoading: boolean, sitemapError: string | null) => {
+  const handleSaveClient = (client: Client, externalSitemapUrls: string[], sitemapSummary: string, sitemapLoading: boolean, sitemapError: string | null) => {
     const clientToSave: Client = {
       ...client,
       externalSitemapUrls: externalSitemapUrls, // Changed to externalSitemapUrls
+      sitemapSummary: sitemapSummary, // Added
     };
     console.log("DEBUG: ClientManager.tsx - Saving Client ID:", clientToSave.id, "External Sitemap URLs:", clientToSave.externalSitemapUrls); // Updated log message
-    setClients(prev => {
-      const existing = prev.find(c => c.id === clientToSave.id);
-      if (existing) {
-        return prev.map(c => c.id === clientToSave.id ? clientToSave : c);
-      }
-      return [...prev, clientToSave];
-    });
-    // If this is the first client, select it
-    if(clients.length === 0) {
-      onSelectClient(client.id);
-    }
+    onClientChange('save', clientToSave); // Changed from setClients
   };
 
   const handleDeleteClient = (clientId: string) => {
     if (window.confirm('Are you sure you want to delete this client? This cannot be undone.')) {
-      setClients(prev => prev.filter(c => c.id !== clientId));
+      onClientChange('delete', { id: clientId } as Client); // Changed from setClients
       if (selectedClientId === clientId) {
         onSelectClient(null);
       }

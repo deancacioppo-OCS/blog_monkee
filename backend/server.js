@@ -33,6 +33,53 @@ const db = new sqlite3.Database('./database.db', (err) => {
 });
 
 db.serialize(() => {
+  // Create clients table if it doesn't exist
+  db.run(`
+    CREATE TABLE IF NOT EXISTS clients (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      industry TEXT,
+      websiteUrl TEXT,
+      uniqueValueProp TEXT,
+      brandVoice TEXT,
+      contentStrategy TEXT,
+      wpUrl TEXT,
+      wpUsername TEXT,
+      wpAppPassword TEXT,
+      sitemapUrl TEXT,
+      externalSitemapUrls TEXT, -- Stored as JSON string
+      generatedBlogPostUrls TEXT, -- Stored as JSON string
+      sitemapSummary TEXT
+    )
+  `);
+
+  // Check if sitemapSummary column exists and add it if not
+  db.get("PRAGMA table_info(clients)", (err, row) => {
+    if (err) {
+      logger.error(`Error checking table info for clients: ${err.message}`);
+      return;
+    }
+    let sitemapSummaryExists = false;
+    if (row) { // Check if row is not null (table exists)
+      db.all("PRAGMA table_info(clients)", (err, columns) => {
+        if (err) {
+          logger.error(`Error getting columns for clients: ${err.message}`);
+          return;
+        }
+        sitemapSummaryExists = columns.some(col => col.name === 'sitemapSummary');
+        if (!sitemapSummaryExists) {
+          db.run("ALTER TABLE clients ADD COLUMN sitemapSummary TEXT", (err) => {
+            if (err) {
+              logger.error(`Error adding sitemapSummary column: ${err.message}`);
+            } else {
+              logger.info("Added sitemapSummary column to clients table.");
+            }
+          });
+        }
+      });
+    }
+  });
+
   db.run(`
     CREATE TABLE IF NOT EXISTS used_topics (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,6 +148,126 @@ app.post('/api/clients/:clientId/sitemap-urls', (req, res, next) => {
     }
     logger.info(`Successfully added sitemap URL "${url}" for client ${clientId} with ID: ${this.lastID}`);
     res.status(201).json({ id: this.lastID });
+  });
+});
+
+// Client Management Routes
+app.get('/api/clients', (req, res, next) => {
+  logger.info('Fetching all clients');
+  db.all('SELECT * FROM clients', (err, rows) => {
+    if (err) {
+      logger.error(`Error fetching all clients: ${err.message}`);
+      return next(err);
+    }
+    // Parse JSON strings back to arrays/objects
+    const clients = rows.map(row => ({
+      ...row,
+      externalSitemapUrls: row.externalSitemapUrls ? JSON.parse(row.externalSitemapUrls) : [],
+      generatedBlogPostUrls: row.generatedBlogPostUrls ? JSON.parse(row.generatedBlogPostUrls) : [],
+      wp: {
+        url: row.wpUrl,
+        username: row.wpUsername,
+        appPassword: row.wpAppPassword
+      }
+    }));
+    logger.info(`Successfully fetched ${clients.length} clients.`);
+    res.json(clients);
+  });
+});
+
+app.get('/api/clients/:id', (req, res, next) => {
+  const { id } = req.params;
+  logger.info(`Fetching client with ID: ${id}`);
+  db.get('SELECT * FROM clients WHERE id = ?', [id], (err, row) => {
+    if (err) {
+      logger.error(`Error fetching client ${id}: ${err.message}`);
+      return next(err);
+    }
+    if (!row) {
+      logger.warn(`Client with ID ${id} not found.`);
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    const client = {
+      ...row,
+      externalSitemapUrls: row.externalSitemapUrls ? JSON.parse(row.externalSitemapUrls) : [],
+      generatedBlogPostUrls: row.generatedBlogPostUrls ? JSON.parse(row.generatedBlogPostUrls) : [],
+      wp: {
+        url: row.wpUrl,
+        username: row.wpUsername,
+        appPassword: row.wpAppPassword
+      }
+    };
+    logger.info(`Successfully fetched client: ${id}`);
+    res.json(client);
+  });
+});
+
+app.post('/api/clients', (req, res, next) => {
+  const { id, name, industry, websiteUrl, uniqueValueProp, brandVoice, contentStrategy, wp, sitemapUrl, externalSitemapUrls, generatedBlogPostUrls, sitemapSummary } = req.body;
+  logger.info(`Attempting to add new client: ${name}`);
+  db.run(`
+    INSERT INTO clients (id, name, industry, websiteUrl, uniqueValueProp, brandVoice, contentStrategy, wpUrl, wpUsername, wpAppPassword, sitemapUrl, externalSitemapUrls, generatedBlogPostUrls, sitemapSummary)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    id, name, industry, websiteUrl, uniqueValueProp, brandVoice, contentStrategy,
+    wp.url, wp.username, wp.appPassword, sitemapUrl,
+    JSON.stringify(externalSitemapUrls || []),
+    JSON.stringify(generatedBlogPostUrls || []),
+    sitemapSummary
+  ], function (err) {
+    if (err) {
+      logger.error(`Error adding client ${name}: ${err.message}`);
+      return next(err);
+    }
+    logger.info(`Successfully added client ${name} with ID: ${id}`);
+    res.status(201).json({ id: id });
+  });
+});
+
+app.put('/api/clients/:id', (req, res, next) => {
+  const { id } = req.params;
+  const { name, industry, websiteUrl, uniqueValueProp, brandVoice, contentStrategy, wp, sitemapUrl, externalSitemapUrls, generatedBlogPostUrls, sitemapSummary } = req.body;
+  logger.info(`Attempting to update client: ${id}`);
+  db.run(`
+    UPDATE clients SET
+      name = ?, industry = ?, websiteUrl = ?, uniqueValueProp = ?, brandVoice = ?, contentStrategy = ?,
+      wpUrl = ?, wpUsername = ?, wpAppPassword = ?, sitemapUrl = ?, externalSitemapUrls = ?, generatedBlogPostUrls = ?, sitemapSummary = ?
+    WHERE id = ?
+  `, [
+    name, industry, websiteUrl, uniqueValueProp, brandVoice, contentStrategy,
+    wp.url, wp.username, wp.appPassword, sitemapUrl,
+    JSON.stringify(externalSitemapUrls || []),
+    JSON.stringify(generatedBlogPostUrls || []),
+    sitemapSummary,
+    id
+  ], function (err) {
+    if (err) {
+      logger.error(`Error updating client ${id}: ${err.message}`);
+      return next(err);
+    }
+    if (this.changes === 0) {
+      logger.warn(`Client with ID ${id} not found for update.`);
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    logger.info(`Successfully updated client: ${id}`);
+    res.json({ message: 'Client updated successfully' });
+  });
+});
+
+app.delete('/api/clients/:id', (req, res, next) => {
+  const { id } = req.params;
+  logger.info(`Attempting to delete client: ${id}`);
+  db.run('DELETE FROM clients WHERE id = ?', [id], function (err) {
+    if (err) {
+      logger.error(`Error deleting client ${id}: ${err.message}`);
+      return next(err);
+    }
+    if (this.changes === 0) {
+      logger.warn(`Client with ID ${id} not found for deletion.`);
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    logger.info(`Successfully deleted client: ${id}`);
+    res.json({ message: 'Client deleted successfully' });
   });
 });
 

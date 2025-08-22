@@ -4,7 +4,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Client, BlogPost } from './types';
-import { useLocalStorage } from './hooks/useLocalStorage';
 import ClientManager from './components/ClientManager';
 import GenerationWorkflow from './components/GenerationWorkflow';
 import ContentEditor from './components/ContentEditor';
@@ -15,7 +14,7 @@ import ContentEditor from './components/ContentEditor';
 import { BrainCircuitIcon } from './components/icons/BrainCircuitIcon';
 
 export default function App(): React.ReactNode {
-  const [clients, setClients] = useLocalStorage<Client[]>('blog-monkee-clients', []);
+  const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [currentBlogPost, setCurrentBlogPost] = useState<BlogPost | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -34,6 +33,23 @@ export default function App(): React.ReactNode {
   const resetToWorkflow = () => {
     setCurrentBlogPost(null);
   };
+
+  const fetchClients = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/clients`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setClients(data);
+    } catch (error) {
+      console.error("Failed to fetch clients:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchClients();
+  }, []); // Empty dependency array means this runs once on mount
 
   useEffect(() => {
     if (selectedClientId) {
@@ -64,6 +80,35 @@ export default function App(): React.ReactNode {
 
   
 
+  const handleClientChange = async (action: 'save' | 'delete', clientData?: Client) => {
+    try {
+      if (action === 'save' && clientData) {
+        const method = clients.some(c => c.id === clientData.id) ? 'PUT' : 'POST';
+        const url = `${import.meta.env.VITE_BACKEND_URL}/api/clients${method === 'PUT' ? '/' + clientData.id : ''}`;
+        const response = await fetch(url, {
+          method: method,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(clientData),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+      } else if (action === 'delete' && clientData?.id) {
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/clients/${clientData.id}`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+      }
+      fetchClients(); // Refresh clients after change
+    } catch (error) {
+      console.error(`Failed to ${action} client:`, error);
+    }
+  };
+
   return (
     <div className="flex h-screen font-sans bg-slate-900 text-slate-200">
       <aside className="w-1/4 max-w-sm h-full bg-slate-800/50 border-r border-slate-700 p-4 flex flex-col">
@@ -73,7 +118,7 @@ export default function App(): React.ReactNode {
         </div>
         <ClientManager
           clients={clients}
-          setClients={setClients}
+          onClientChange={handleClientChange} // Changed prop
           selectedClientId={selectedClientId}
           onSelectClient={handleSelectClient}
           isGenerating={isGenerating}

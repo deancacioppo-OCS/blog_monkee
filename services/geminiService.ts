@@ -1,5 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Client, BlogPost } from "../types";
+import fetch from 'node-fetch';
+import { parseStringPromise } from 'xml2js';
 
 const API_KEY = import.meta.env.VITE_API_KEY;
 
@@ -14,11 +16,63 @@ function getAiInstance() {
 const textModel = "gemini-2.5-flash";
 const imageModel = "imagen-3.0-generate-002";
 
+export async function fetchAndSummarizeSitemap(client: Client): Promise<string> {
+    if (!client.sitemapUrl) {
+        return "No sitemap URL provided for this client.";
+    }
+
+    try {
+        const sitemapResponse = await fetch(client.sitemapUrl);
+        const sitemapText = await sitemapResponse.text();
+        const sitemapJson = await parseStringPromise(sitemapText);
+
+        const urls = sitemapJson.urlset.url.map((entry: any) => entry.loc[0]);
+
+        // Take a sample of URLs to summarize to avoid exceeding token limits
+        const sampleUrls = urls.slice(0, Math.min(urls.length, 5)); // Summarize up to 5 URLs
+
+        let pageContents: string[] = [];
+        for (const url of sampleUrls) {
+            try {
+                const pageResponse = await fetch(url);
+                const pageText = await pageResponse.text();
+                // Basic text extraction (can be improved with a proper HTML parser)
+                const cleanText = pageText.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim();
+                pageContents.push(cleanText.substring(0, 1000)); // Limit content per page
+            } catch (pageError) {
+                console.error(`Failed to fetch content from ${url}:`, pageError);
+            }
+        }
+
+        if (pageContents.length === 0) {
+            return "Could not fetch content from sitemap URLs.";
+        }
+
+        const ai = getAiInstance();
+        const summaryPrompt = `
+            Summarize the main topics and themes from the following website content. Focus on the core business, services, and industry.
+            Content:
+            ${pageContents.join('\n---\n')}
+        `;
+        const summaryResponse = await ai.models.generateContent({
+            model: textModel,
+            contents: summaryPrompt,
+        });
+        return summaryResponse.text.trim();
+
+    } catch (error) {
+        console.error("Failed to fetch or summarize sitemap:", error);
+        return "Failed to fetch or summarize sitemap content.";
+    }
+}
+
 async function findTrendingTopic(client: Client): Promise<string> {
     const ai = getAiInstance();
     const prompt = `
       // Client ID: ${client.id}
       Using Google Search, find one current and highly relevant trending topic, news story, or popular question related to the '${client.industry}' industry. Provide only the topic name or headline.
+      **CRITICAL:** The topic MUST be strictly relevant to the client's existing website content and industry. Use the provided sitemap summary for context.
+      Sitemap Summary: ${client.sitemapSummary || 'No sitemap summary available.'}
       Consider the existing content on the client's website (from the sitemap) to avoid duplicate topics and find relevant areas for internal linking.
       **Rule:** Never create any content that is disparaging to the client or the client's business model.
       Existing sitemap URLs:
@@ -57,6 +111,9 @@ async function generateBlogDetails(client: Client, topic: string): Promise<{ tit
     Company's brand voice: '${client.brandVoice}'
     Company's content strategy: '${client.contentStrategy}'
     We want to write a blog post about the following topic: '${topic}'
+
+    **CRITICAL:** The generated title, angle, and keywords MUST be strictly relevant to the client's existing website content and industry. Use the provided sitemap summary for context.
+    Sitemap Summary: ${client.sitemapSummary || 'No sitemap summary available.'}
 
     Consider the existing content on the client's website (from the sitemap) to ensure the new blog post is unique and provides good internal linking opportunities.
     Existing sitemap URLs:
@@ -106,6 +163,8 @@ async function generateFullContent(title: string, outline: string, client: Clien
     console.log("DEBUG: generateFullContent - Client ID:", client.id, "Client Name:", client.name, "External Sitemap URLs:", client.externalSitemapUrls); // Added log
     const ai = getAiInstance();
     let prompt = `// Client ID: ${client.id}\n`;
+    prompt += `**CRITICAL INSTRUCTION: All content MUST be strictly relevant to the client's industry: '${client.industry}'. DO NOT generate content outside of this industry.**\n\n`;
+    prompt += `**CRITICAL CONTEXT: Client Website Summary:**\n${client.sitemapSummary || 'No sitemap summary available.'}\n\n`;
     prompt += `Write a complete blog post in HTML format based on the provided title and outline.\n`;
     prompt += `Title (H1): '${title}'\n`;
     prompt += `Outline:\n`;
@@ -117,6 +176,7 @@ async function generateFullContent(title: string, outline: string, client: Clien
     prompt += `- Ensure the tone is confident and expert. Avoid apologetic language or AI self-references.\n`;
     prompt += `- The content must be original and engaging.\n`;
     prompt += `- **Rule:** Never create any content that is disparaging to the client or the client's business model.\n`;
+    prompt += `- **STRICTLY ADHERE TO THE CLIENT'S INDUSTRY: '${client.industry}'.**\n`;
     prompt += `\n`; // Add a newline for separation
     prompt += `**Internal Linking (CRITICAL):**\n`;
     prompt += `- MUST include exactly 2-4 internal HTML hyperlinks. Each link MUST point to a different URL from the provided sitemap. Anchor text MUST be naturally and contextually integrated. Only link to to live, published URLs.\n`;

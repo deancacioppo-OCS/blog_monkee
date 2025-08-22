@@ -17,6 +17,7 @@ export interface Client {
   sitemapUrl?: string;
   externalSitemapUrls?: string[];
   generatedBlogPostUrls?: string[];
+  sitemapSummary?: string;
 }
 
 export interface BlogPost {

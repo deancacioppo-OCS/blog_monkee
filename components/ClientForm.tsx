@@ -5,11 +5,12 @@ import { Input } from './ui/Input';
 import { Textarea } from './ui/Textarea';
 import { Button } from './ui/Button';
 import useSitemap from '../hooks/useSitemap';
+import { fetchAndSummarizeSitemap } from '../services/geminiService';
 
 interface ClientFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (client: Client, externalSitemapUrls: string[], sitemapLoading: boolean, sitemapError: string | null) => void; // Modified
+  onSave: (client: Client, externalSitemapUrls: string[], sitemapSummary: string, sitemapLoading: boolean, sitemapError: string | null) => void; // Modified
   existingClient: Client | null;
 }
 
@@ -55,7 +56,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log("DEBUG: ClientForm.tsx - handleSubmit - formData.sitemapUrl:", formData.sitemapUrl); // Added log
     console.log("DEBUG: ClientForm.tsx - handleSubmit - sitemapUrls from useSitemap:", sitemapUrls); // Added log
@@ -82,7 +83,12 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, existi
       },
       externalSitemapUrls: sitemapUrls, // Changed to externalSitemapUrls
     };
-    onSave(clientToSave, sitemapUrls, sitemapLoading, sitemapError); // Modified
+
+    // Fetch and summarize sitemap
+    const sitemapSummary = await fetchAndSummarizeSitemap(clientToSave); // Added
+    clientToSave.sitemapSummary = sitemapSummary; // Added
+
+    onSave(clientToSave, sitemapUrls, sitemapSummary, sitemapLoading, sitemapError); // Modified
     onClose();
   };
 
