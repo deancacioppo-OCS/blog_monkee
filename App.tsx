@@ -39,7 +39,7 @@ export default function App(): React.ReactNode {
     if (selectedClientId) {
       const fetchSitemapUrls = async () => {
         try {
-          const response = await fetch(`http://localhost:3001/api/clients/${selectedClientId}/sitemap-urls`);
+          const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/clients/${selectedClientId}/sitemap-urls`);
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
